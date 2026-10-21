@@ -1,0 +1,8 @@
+src/harness/gpu.env
+.venv/
+__pycache__/
+*.pyc
+tasks/
+checkpoints/
+data/
+bench50/

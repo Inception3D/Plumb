@@ -1,0 +1,6 @@
+[submodule "third_party/sam3"]
+	path = third_party/sam3
+	url = https://github.com/facebookresearch/sam3.git
+[submodule "third_party/Pi3"]
+	path = third_party/Pi3
+	url = https://github.com/yyfz/Pi3.git

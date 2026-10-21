@@ -1,0 +1,4 @@
+# Benchmark scripts (download, build, evaluate, screen): the agent environment plus these.
+-r ../requirements.txt
+h5py>=3.8
+requests>=2.28

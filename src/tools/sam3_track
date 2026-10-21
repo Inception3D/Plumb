@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""SAM3 text-prompted video segmentation + tracking (GPU).
+
+usage: tools/sam3_track --video input/video.mp4 --prompt "domino" --out work/sam3_domino
+         [--prompt-frame K] [--max-frames N] [--threshold 0.5] [--box X Y W H] [--box-only] [--members]
+
+Every frame of the video is processed (frame indices = native video frame indices), starting from
+--prompt-frame and propagating both ways; --max-frames limits how many frames are tracked.
+--box gives a positive exemplar box on the prompt frame in RELATIVE xywh (0-1).
+Outputs in --out:
+  manifest.json                     summary, per-frame object list (object_id, box_xywh px, score, centroid_xy px)
+  tracks.json                       per object id: observations [{frame_index, centroid_xy, box_xywh, score}]
+  frames/frame_XXXXXX.npz           object_ids (K,), scores (K,), masks (K,H,W) bool, boxes_xywh (K,4)
+  masks/frame_XXXXXX_object_YYYY.png
+--members: many similar objects (a domino run, a stack of cups, a pile), where video tracking loses
+  instances: every instance of the prompt on --prompt-frame only, by SAM3's image detector on the whole frame and
+  on finer overlapping tiles while the detector is crowded (one pass has 200 detection queries). Writes
+  frames/frame_<K>.npz (members 1..N, id 0 = their union), members.json (id, score, centroid, bbox, area, mean RGB;
+  candidates below the threshold), manifest.json. (`python -m r2s gpu members` has more options.)
+Prints the service result as JSON. GPUs are shared: if you get an out-of-memory error, retry with
+--max-frames smaller or later.
+"""
+import argparse, json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _gpu_call import call
+
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("--video", required=True); ap.add_argument("--prompt", required=True); ap.add_argument("--out", required=True)
+ap.add_argument("--prompt-frame", type=int, default=0); ap.add_argument("--max-frames", type=int)
+ap.add_argument("--threshold", type=float, default=.5); ap.add_argument("--box", type=float, nargs=4)
+ap.add_argument("--box-only", action="store_true")
+ap.add_argument("--members", action="store_true", help="every instance on --prompt-frame (many similar objects)")
+a = ap.parse_args()
+req = dict(mode="video", input_path=str(Path(a.video).resolve()), output_dir=str(Path(a.out).resolve()),
+           prompt=a.prompt, prompt_frame=a.prompt_frame, confidence_threshold=a.threshold)
+if a.members:
+    req.update(mode="members", prompts=[a.prompt], frames=[a.prompt_frame])
+if a.max_frames: req["max_frames"] = a.max_frames
+if a.box: req.update(prompt_box_xywh=a.box, prompt_box_only=a.box_only)
+Path(a.out).mkdir(parents=True, exist_ok=True)
+print(json.dumps(call("sam3", req), indent=1))

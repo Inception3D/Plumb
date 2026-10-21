@@ -1,0 +1,1453 @@
+{
+ "name": "bench50",
+ "description": "Video-to-MuJoCo benchmark: 25 PhysInOne + 25 Physion v1.5 scenes. Every video is on the real-time axis: one video second is one second of physics with g = 9.81 m/s^2 in the GT metres.",
+ "criteria": {
+  "scope": "PhysInOne (SinglePhysics, Train split) + Physion v1.5 (test split), 25 scenes each",
+  "physical_plausibility": [
+   "PhysInOne movers: linear damping <= 0.05 and angular damping <= 0.5 (Chaos defaults 0.01/0); no zero mass",
+   "GT friction deceleration <= 1 g (PhysInOne) / stops faster than 0.6 g are collisions (Physion mu_dyn 0.25)",
+   "GT restitution <= 0.95; clip gravity consistent with the dataset value (2.25 m/s^2 +-10 %) when measurable",
+   "colliding movers: GT mass / real-world prior (material or object class x hull volume from 4 GT depth views) agree within 3x across the movers",
+   "objects of fixed real size (balls, cans, bottles, Rubik cube) within 0.5-2x their real size",
+   "visual check of every scene: no floating spinning panels, no 2-6 m cannonballs/boulders, no 9.9 kg toy ball next to 10 kg boxes",
+   "Physion: one material for all objects (mu 0.4/0.25, e 0.4, masses proportional to volume); no rise of translational+potential energy"
+  ],
+  "passive_reproducibility": [
+   "all motion starts at the first frame: an initial velocity or gravity from rest (the task prompt forbids later pushes, motors and timed forces)",
+   "leading still frames before an invisible push / release are trimmed (first_frame: Physion dominoes 15, vase 5; PhysInOne pendulum release 18)",
+   "motor-accelerated spins (Accel*Spin) and catapults excluded; constant-rate spins kept (free flywheel)",
+   "fast spins that alias at the video frame rate (fan / windmill at ~1 rad per frame) excluded"
+  ],
+  "evaluability": [
+   "GT trajectories cover every video frame; video frames present (8 PhysInOne zips have none, 14 have no actor trajectories)",
+   "GT depth and segmentation for every frame (Physion drop_sidezone_box ships no _depth_cam0)",
+   "moving objects visible in camera 0 (>= 200 px in >= 50 % of frames for the main movers)",
+   ">= 1 GT physical-quantity item (initial speed, period, mass ratio, restitution, deceleration, spin rate / acceleration); spinning objects with visible texture (plain symmetric discs excluded)",
+   "no two scenes with identical GT motion (DoublePendulum bg071 variants differ only in material)"
+  ],
+  "diversity": "PhysInOne: 15 of 18 subclasses, 2 per subclass at most except pendulum/collision; Physion: all 7 categories, 1-4 subtypes each"
+ },
+ "timing": {
+  "g": 9.81,
+  "physinone_default_g": 2.25,
+  "physion_frame_dt": 0.01,
+  "physinone": "per clip: g_clip = median free-fall acceleration fitted on the GT actor transforms over GT time_seconds (10-sample windows; used when >= 5 windows agree within an IQR of 10 % of the median), else the dataset value 2.25 m/s^2; video rate = round(30 / sqrt(g_clip / 9.81), 4) fps",
+  "physion_v15": "0.01 s per frame (100 fps), confirmed per clip from GT rotations vs angular velocities",
+  "first_frame": "the video starts at this source frame; source frame ids are kept in meta/<job_id>/timestamps.csv"
+ },
+ "encoding": {
+  "ffmpeg": "videos were made with FFmpeg 4.4.2 (Ubuntu 22.04, libx264 core 163 r3060); other versions may give different bytes (same frames and timestamps)",
+  "x264_threads": "passed explicitly; x264 output depends on its thread count (these are the counts x264 chose automatically on the original 192-CPU host)",
+  "direct": "source frames from first_frame -> ffmpeg -framerate R -start_number 0 -i %06d.<jpg|png> -an -c:v libx264 -threads T -preset veryfast -crf 18 -pix_fmt yuv420p -vf pad=ceil(iw/2)*2:ceil(ih/2)*2 -r R -movflags +faststart; R = 100 (Physion) or N/10000 (PhysInOne)",
+  "two_step": "step 1 (all source frames at 30 fps): ffmpeg -threads 1 -framerate 30.0 -start_number 0 -i %06d.<jpg|png> -an -c:v libx264 -threads 1 -preset veryfast -crf 18 -pix_fmt yuv420p -vf pad=ceil(iw/2)*2:ceil(ih/2)*2 -movflags +faststart; step 2 (lossless, new timestamps): ffmpeg -i step1.mp4 -an -vf setpts=N/(R)/TB -r R -c:v libx264 -threads T -pix_fmt yuv420p -qp 0 -bf 0 -preset veryfast; for PhysInOne R = round(1 / (dt1 * sqrt(g_clip / 9.81)), 4) with dt1 the median step-1 frame interval as printed by ffprobe (0.033333 s)"
+ },
+ "datasets": {
+  "physinone": {
+   "homepage": "https://huggingface.co/datasets/vLAR/PhysInOne",
+   "license": "CC BY-NC-SA 4.0 (Hugging Face dataset card)",
+   "files": "scene ZIPs <category>/<scene>_trajectory.zip from the Hugging Face shard repos PhysInOneP01..P16 (index: vLAR/PhysInOne), each at a pinned revision, checked by the LFS sha256",
+   "kind": "zip_rgb",
+   "camera": "CineCamera_0"
+  },
+  "physion_v15": {
+   "homepage": "https://physion-benchmark.github.io/physion_v15",
+   "license": "not stated on the release page",
+   "files": "HDF5 members <category>/<category>_all_movies/<sample>.hdf5 of the test-set ZIP per category, read by HTTP range requests and checked by the ZIP CRC32 and size",
+   "kind": "hdf5_rgb",
+   "camera": "cam0"
+  }
+ },
+ "dataset_counts": {
+  "physinone": 25,
+  "physion_v15": 25
+ },
+ "download_bytes": 37804622003,
+ "stored_bytes": 38685560229,
+ "scenes": [
+  {
+   "job_id": "010_physinone_pendulum_DoublePendulum__bg001__RL8Puj",
+   "dataset": "physinone",
+   "category": "pendulum",
+   "sample_id": "DoublePendulum__bg001__RL8Puj",
+   "source": "physinone/pendulum/DoublePendulum__bg001__RL8Puj_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 2, period 1, speed0 2",
+   "video": {
+    "sha256": "6696bec099c38429511309f3d0b919c982281305bec1fba917f23a52d19a111a",
+    "frame_count": 150,
+    "frame_dt": 0.01596360298519376
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "545a5ed158074f58237958ed0dd284937aa2dbedf3029700c48c6ef0a85f1676",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP05/PhysInOneP05",
+    "revision": "042726dbf2da88de93df7174ace5c07f0d4af466",
+    "path": "Train/SinglePhysics/DoublePendulum__bg001__RL8Puj_trajectory.zip",
+    "size": 1189135679,
+    "sha256": "640f257d38ac257deb62d9d8422f92f4bc153ab0fe49dd7e5f994898ec445f81"
+   }
+  },
+  {
+   "job_id": "029_physinone_collision_MovingHitsStationary__bg127__FICCnn",
+   "dataset": "physinone",
+   "category": "collision",
+   "sample_id": "MovingHitsStationary__bg127__FICCnn",
+   "source": "physinone/collision/MovingHitsStationary__bg127__FICCnn_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 2, restitution 1, speed0 1",
+   "video": {
+    "sha256": "2445a428fa25b7924b9f246f8e9f2a4458b4ea375c96306eee07de290bcb3a40",
+    "frame_count": 150,
+    "frame_dt": 0.01594728465584165
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "0bbdcd62729bc5d8bdd1a8fede94be330b4374676a81800504eda45d3e844a93",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP15/PhysInOneP15",
+    "revision": "6c83e0598112651af257be6072edabfb8c67447e",
+    "path": "Train/SinglePhysics/MovingHitsStationary__bg127__FICCnn_trajectory.zip",
+    "size": 1050577965,
+    "sha256": "12eb33af6ac47fa1d3693e4d0725b1114686b7c97835930018afdbf0c895e23b"
+   }
+  },
+  {
+   "job_id": "030_physinone_rotation_and_friction_FrictionStop__bg002__HUTmYY",
+   "dataset": "physinone",
+   "category": "rotation_and_friction",
+   "sample_id": "FrictionStop__bg002__HUTmYY",
+   "source": "physinone/rotation_and_friction/FrictionStop__bg002__HUTmYY_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, restitution 1, speed0 3",
+   "video": {
+    "sha256": "e195127b792cca85ec7a5d48e7487aaa28203dfd2eb00af9529394fbaa9a7958",
+    "frame_count": 150,
+    "frame_dt": 0.01596360298519376
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "c7d215261dd634133755f264a95d9b210a169db14587d0a6cec2c48e23adfff4",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP05/PhysInOneP05",
+    "revision": "042726dbf2da88de93df7174ace5c07f0d4af466",
+    "path": "Train/SinglePhysics/FrictionStop__bg002__HUTmYY_trajectory.zip",
+    "size": 861856659,
+    "sha256": "53a856b4d25e768d33d53d34b0fd5eb825475933f3cdac61c2d38e6cc4d721bb"
+   }
+  },
+  {
+   "job_id": "038_physinone_collision_MovingHitsStationary__bg127__wy9rl7",
+   "dataset": "physinone",
+   "category": "collision",
+   "sample_id": "MovingHitsStationary__bg127__wy9rl7",
+   "source": "physinone/collision/MovingHitsStationary__bg127__wy9rl7_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, restitution 1, speed0 1",
+   "video": {
+    "sha256": "fe6a45969e1ae4d1b40198e057cc75210dcf4153facb4214165eb37b322cf6db",
+    "frame_count": 120,
+    "frame_dt": 0.01596360298519376
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "9b7dbd660120154c441843921bd0a134b347e6dea08a684338c0863d424cc9e0",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP03/PhysInOneP03",
+    "revision": "b84c7b3be3c362a58c59eff36c7d4b2c7390a128",
+    "path": "Train/SinglePhysics/MovingHitsStationary__bg127__wy9rl7_trajectory.zip",
+    "size": 1044268900,
+    "sha256": "3dfb07923ed8ebfb17c08c95fbbef4564fb09455ffa40e708875a5a3bc3c0782"
+   }
+  },
+  {
+   "job_id": "101_physinone_collision_MovingHitsFixed__bg001__Jp26kU",
+   "dataset": "physinone",
+   "category": "collision",
+   "sample_id": "MovingHitsFixed__bg001__Jp26kU",
+   "source": "physinone/collision/MovingHitsFixed__bg001__Jp26kU_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, restitution 1, speed0 2",
+   "video": {
+    "sha256": "f2dbbc3ed79fdb188af776a63a2b8d84e1589973d12f9f8f53f31322a2d03e0a",
+    "frame_count": 90,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP06/PhysInOneP06",
+    "revision": "34f4a29a84c42e9c1fbbb68f32dda1909f929e37",
+    "path": "Train/SinglePhysics/MovingHitsFixed__bg001__Jp26kU_trajectory.zip",
+    "size": 638714097,
+    "sha256": "e0de374e7c9ef57353ce39cb9d3b00cf7b0d263c59a07493e0b9bf698ef9722a"
+   }
+  },
+  {
+   "job_id": "102_physinone_collision_MovingHitsFixed__bg001__Z5WPkC",
+   "dataset": "physinone",
+   "category": "collision",
+   "sample_id": "MovingHitsFixed__bg001__Z5WPkC",
+   "source": "physinone/collision/MovingHitsFixed__bg001__Z5WPkC_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): restitution 1, speed0 2",
+   "video": {
+    "sha256": "5dce62a19ab0ad273a9d3272852419cc8ba7c157e1be140e853132baced6c41b",
+    "frame_count": 90,
+    "frame_dt": 0.015969797918177143
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP09/PhysInOneP09",
+    "revision": "91f56f14f81e08972bc7ea6195e702d09b4c3d2a",
+    "path": "Train/SinglePhysics/MovingHitsFixed__bg001__Z5WPkC_trajectory.zip",
+    "size": 632187822,
+    "sha256": "be47972c8fcaa4d941b784745fb3e3dd68a26eebb2f8e8a9560eb6e5745d7b90"
+   }
+  },
+  {
+   "job_id": "103_physinone_collision_MovingHitsFixed__bg072__YdcZ3D",
+   "dataset": "physinone",
+   "category": "collision",
+   "sample_id": "MovingHitsFixed__bg072__YdcZ3D",
+   "source": "physinone/collision/MovingHitsFixed__bg072__YdcZ3D_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, restitution 1, speed0 1",
+   "video": {
+    "sha256": "84638b34c584528a0e35db351e349f6dfc818ec0d5ab64ae4bfa3ce77e6c53e8",
+    "frame_count": 150,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP04/PhysInOneP04",
+    "revision": "e6482e0fbdb2ad66e57c71443ef3095ed775248e",
+    "path": "Train/SinglePhysics/MovingHitsFixed__bg072__YdcZ3D_trajectory.zip",
+    "size": 503370712,
+    "sha256": "19f7c71fdf063a94bff4db44e7bdb0ad6e52717227902e61ed730e11e82569fd"
+   }
+  },
+  {
+   "job_id": "104_physinone_collision_MovingHitsMoving__bg001__rfugUb",
+   "dataset": "physinone",
+   "category": "collision",
+   "sample_id": "MovingHitsMoving__bg001__rfugUb",
+   "source": "physinone/collision/MovingHitsMoving__bg001__rfugUb_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, speed0 2",
+   "video": {
+    "sha256": "9f23b2035271aed6d2c662c686fc79b5b459ed54c52db5e8aa3ff81d0f8a0160",
+    "frame_count": 180,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP10/PhysInOneP10",
+    "revision": "0b458243ceb0d287f8dfab66156e5560cc961bc4",
+    "path": "Train/SinglePhysics/MovingHitsMoving__bg001__rfugUb_trajectory.zip",
+    "size": 872684527,
+    "sha256": "638c17f89df395732d3c608203d9300f1ff820c735bc7a14344c4441d21bec7b"
+   }
+  },
+  {
+   "job_id": "105_physinone_collision_MovingHitsStationary__bg127__8Z3hWC",
+   "dataset": "physinone",
+   "category": "collision",
+   "sample_id": "MovingHitsStationary__bg127__8Z3hWC",
+   "source": "physinone/collision/MovingHitsStationary__bg127__8Z3hWC_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, mass_rel 2, restitution 2, speed0 1",
+   "video": {
+    "sha256": "bd799a1ff68115c6ad086a76a249055b2e712a1b248b29bc0198b747847ab399",
+    "frame_count": 150,
+    "frame_dt": 0.01588441230851341
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP04/PhysInOneP04",
+    "revision": "e6482e0fbdb2ad66e57c71443ef3095ed775248e",
+    "path": "Train/SinglePhysics/MovingHitsStationary__bg127__8Z3hWC_trajectory.zip",
+    "size": 1162069039,
+    "sha256": "2a61dc9346886145cb6d862e844f008880f8632146aa75e44cadd39a3f63d92e"
+   }
+  },
+  {
+   "job_id": "106_physinone_projectile_and_rolling_ObliqueProjectile__bg067__Xa5FxY",
+   "dataset": "physinone",
+   "category": "projectile_and_rolling",
+   "sample_id": "ObliqueProjectile__bg067__Xa5FxY",
+   "source": "physinone/projectile_and_rolling/ObliqueProjectile__bg067__Xa5FxY_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, restitution 2, speed0 2",
+   "video": {
+    "sha256": "70423591ffbbc67677b1c2ca6a812f14993831cc6e03b2a3ec4edc5b7fdac4cc",
+    "frame_count": 120,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP03/PhysInOneP03",
+    "revision": "b84c7b3be3c362a58c59eff36c7d4b2c7390a128",
+    "path": "Train/SinglePhysics/ObliqueProjectile__bg067__Xa5FxY_trajectory.zip",
+    "size": 480988977,
+    "sha256": "3c1811c95526e0b0b01e04c12949155788d4cd994e9f361404b6534bffb22b01"
+   }
+  },
+  {
+   "job_id": "107_physinone_projectile_and_rolling_ObliqueProjectile__bg067__uKciRp",
+   "dataset": "physinone",
+   "category": "projectile_and_rolling",
+   "sample_id": "ObliqueProjectile__bg067__uKciRp",
+   "source": "physinone/projectile_and_rolling/ObliqueProjectile__bg067__uKciRp_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): restitution 2, speed0 2",
+   "video": {
+    "sha256": "2a3ff3d0a6b316c93a2ee2e79a0b0483065fbb5ec5337c2883b1be64c59e502b",
+    "frame_count": 120,
+    "frame_dt": 0.015977197343950714
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP15/PhysInOneP15",
+    "revision": "6c83e0598112651af257be6072edabfb8c67447e",
+    "path": "Train/SinglePhysics/ObliqueProjectile__bg067__uKciRp_trajectory.zip",
+    "size": 533156029,
+    "sha256": "d3286ac84be1495b6f631596364f89401b5083d544af231a5f953bc35976f886"
+   }
+  },
+  {
+   "job_id": "108_physinone_projectile_and_rolling_VerticalFall__bg062__5YVQeG",
+   "dataset": "physinone",
+   "category": "projectile_and_rolling",
+   "sample_id": "VerticalFall__bg062__5YVQeG",
+   "source": "physinone/projectile_and_rolling/VerticalFall__bg062__5YVQeG_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): speed0 1",
+   "video": {
+    "sha256": "2a1ec69bf4f1b2975ec523578b37ed1f1a43a0f10c47a5ff59477c1733dd065c",
+    "frame_count": 180,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP07/PhysInOneP07",
+    "revision": "0ee6c09f9f1d544ed15db301850c1dafa2036ed1",
+    "path": "Train/SinglePhysics/VerticalFall__bg062__5YVQeG_trajectory.zip",
+    "size": 534790693,
+    "sha256": "e54d5ae1e9f1e22ec3930ef49c99f32237ce78f92456b82fcfc7dc6f14f73d1a"
+   }
+  },
+  {
+   "job_id": "109_physinone_projectile_and_rolling_RollDownSlope__bg071__4j3vxm",
+   "dataset": "physinone",
+   "category": "projectile_and_rolling",
+   "sample_id": "RollDownSlope__bg071__4j3vxm",
+   "source": "physinone/projectile_and_rolling/RollDownSlope__bg071__4j3vxm_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, mass_rel 1",
+   "video": {
+    "sha256": "4707090b3f381ee1fb3d16958c8c9bc2ba2c0fa2e6bcff109a2b1c2bd0c0a7d3",
+    "frame_count": 150,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP05/PhysInOneP05",
+    "revision": "042726dbf2da88de93df7174ace5c07f0d4af466",
+    "path": "Train/SinglePhysics/RollDownSlope__bg071__4j3vxm_trajectory.zip",
+    "size": 569073245,
+    "sha256": "7a0d2d11a54fc50da7a4c26a79c48979ffa573d7310c827c265ee92c43dfd9d4"
+   }
+  },
+  {
+   "job_id": "110_physinone_projectile_and_rolling_RollDownSlope__bg140__JKzu2V",
+   "dataset": "physinone",
+   "category": "projectile_and_rolling",
+   "sample_id": "RollDownSlope__bg140__JKzu2V",
+   "source": "physinone/projectile_and_rolling/RollDownSlope__bg140__JKzu2V_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): restitution 1, speed0 1",
+   "video": {
+    "sha256": "a89aee52723638b4ab22d5b94a6e4a5796175801aaa828a9006f69b4e51b5d4e",
+    "frame_count": 150,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP09/PhysInOneP09",
+    "revision": "91f56f14f81e08972bc7ea6195e702d09b4c3d2a",
+    "path": "Train/SinglePhysics/RollDownSlope__bg140__JKzu2V_trajectory.zip",
+    "size": 740149594,
+    "sha256": "892f3dfceaf0e3317b9bd8f212f9cc012de21cb0de6ad262c3ea66e360e60546"
+   }
+  },
+  {
+   "job_id": "111_physinone_projectile_and_rolling_RollDownSlope__bg139__5aed4T",
+   "dataset": "physinone",
+   "category": "projectile_and_rolling",
+   "sample_id": "RollDownSlope__bg139__5aed4T",
+   "source": "physinone/projectile_and_rolling/RollDownSlope__bg139__5aed4T_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, restitution 1, speed0 1",
+   "video": {
+    "sha256": "8d06f315e96d0782fd26f2742fa2a34f788b276647cf1a42ade5dafa49ceaa52",
+    "frame_count": 90,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP11/PhysInOneP11",
+    "revision": "cd47c495ae815420e80bfef1c52815c8d082b469",
+    "path": "Train/SinglePhysics/RollDownSlope__bg139__5aed4T_trajectory.zip",
+    "size": 405046095,
+    "sha256": "31e1fd47bc8ce4eb6205f6dda67c3c32df925e47ab6a25536ef6423ef365e537"
+   }
+  },
+  {
+   "job_id": "112_physinone_pendulum_SimplePendulum__bg034__vd33pn",
+   "dataset": "physinone",
+   "category": "pendulum",
+   "sample_id": "SimplePendulum__bg034__vd33pn",
+   "source": "physinone/pendulum/SimplePendulum__bg034__vd33pn_trajectory.zip",
+   "first_frame": 18,
+   "why": "GT items (screen): mass_rel 1, period 2",
+   "trim_reason": "pendulum held still for 18 frames, then released (invisible trigger)",
+   "video": {
+    "sha256": "cfdbb43835aa569db86162b48ecafeb481a176141a99d714b80c359af660abf6",
+    "frame_count": 132,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP06/PhysInOneP06",
+    "revision": "34f4a29a84c42e9c1fbbb68f32dda1909f929e37",
+    "path": "Train/SinglePhysics/SimplePendulum__bg034__vd33pn_trajectory.zip",
+    "size": 368436397,
+    "sha256": "f82ca843ea339554b77c5d3954f5b19b452b34694be016dd68457dd54c11553f"
+   }
+  },
+  {
+   "job_id": "113_physinone_pendulum_SimplePendulum__bg002__5nqe1t",
+   "dataset": "physinone",
+   "category": "pendulum",
+   "sample_id": "SimplePendulum__bg002__5nqe1t",
+   "source": "physinone/pendulum/SimplePendulum__bg002__5nqe1t_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 1, period 1",
+   "video": {
+    "sha256": "e68ccb5cd824fcaf5147964d63cdce6882309e0ece720947623361b8e2be24a2",
+    "frame_count": 150,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP03/PhysInOneP03",
+    "revision": "b84c7b3be3c362a58c59eff36c7d4b2c7390a128",
+    "path": "Train/SinglePhysics/SimplePendulum__bg002__5nqe1t_trajectory.zip",
+    "size": 1045403089,
+    "sha256": "850589273099e7ca3c0a5f06a111b94409befce363e8b9195ee4d3afa9faa07c"
+   }
+  },
+  {
+   "job_id": "114_physinone_pendulum_DoublePendulum__bg071__2aFZqm",
+   "dataset": "physinone",
+   "category": "pendulum",
+   "sample_id": "DoublePendulum__bg071__2aFZqm",
+   "source": "physinone/pendulum/DoublePendulum__bg071__2aFZqm_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 2, period 1, restitution 1, speed0 2",
+   "video": {
+    "sha256": "f6ae7cb3ece0ab0232d3fe996d6f2b6885ba4e75b26ac793f155c043ce4928f3",
+    "frame_count": 120,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP06/PhysInOneP06",
+    "revision": "34f4a29a84c42e9c1fbbb68f32dda1909f929e37",
+    "path": "Train/SinglePhysics/DoublePendulum__bg071__2aFZqm_trajectory.zip",
+    "size": 461383285,
+    "sha256": "202b3f561867a5c3b16b36921d753fa93f01a24564b40ea2dab15fbed5dad19e"
+   }
+  },
+  {
+   "job_id": "115_physinone_rotation_and_friction_FrictionStop__bg110__AJ9JO5",
+   "dataset": "physinone",
+   "category": "rotation_and_friction",
+   "sample_id": "FrictionStop__bg110__AJ9JO5",
+   "source": "physinone/rotation_and_friction/FrictionStop__bg110__AJ9JO5_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 3, speed0 3",
+   "video": {
+    "sha256": "8492513272edaf710c5a4c5a1ee1e45a37585fc013dfb4cf6a3b8a3dcb5db1e4",
+    "frame_count": 300,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP02/PhysInOneP02",
+    "revision": "c39abc07b1cf2d260b222d902065098b8f9f424d",
+    "path": "Train/SinglePhysics/FrictionStop__bg110__AJ9JO5_trajectory.zip",
+    "size": 1659207928,
+    "sha256": "839d50afef5cfdc39da069dceedbf07b09ad108d4996e2e7153563a4f822104e"
+   }
+  },
+  {
+   "job_id": "116_physinone_rotation_and_friction_UniformConcaveSpin__bg135__8dF4G9",
+   "dataset": "physinone",
+   "category": "rotation_and_friction",
+   "sample_id": "UniformConcaveSpin__bg135__8dF4G9",
+   "source": "physinone/rotation_and_friction/UniformConcaveSpin__bg135__8dF4G9_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): spin_accel 1, spin_rate 1",
+   "video": {
+    "sha256": "e66fa68167c13cf2f28eb489127f01b2a14e4a329a42ac3ccce59fab1bb299da",
+    "frame_count": 150,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP02/PhysInOneP02",
+    "revision": "c39abc07b1cf2d260b222d902065098b8f9f424d",
+    "path": "Train/SinglePhysics/UniformConcaveSpin__bg135__8dF4G9_trajectory.zip",
+    "size": 798770325,
+    "sha256": "2b8e1073a4b3ab0e0d29128bd8e71fa618a3b3f9c447c0f62868ec2d42a425cd"
+   }
+  },
+  {
+   "job_id": "117_physinone_rotation_and_friction_UniformPanelSpin__bg025__58TXXw",
+   "dataset": "physinone",
+   "category": "rotation_and_friction",
+   "sample_id": "UniformPanelSpin__bg025__58TXXw",
+   "source": "physinone/rotation_and_friction/UniformPanelSpin__bg025__58TXXw_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): spin_accel 1, spin_rate 1",
+   "video": {
+    "sha256": "4afb5710d4e84e11a99dfd63f49422aa87c50dbbdfde022f11f55ee58f814c2f",
+    "frame_count": 150,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP07/PhysInOneP07",
+    "revision": "0ee6c09f9f1d544ed15db301850c1dafa2036ed1",
+    "path": "Train/SinglePhysics/UniformPanelSpin__bg025__58TXXw_trajectory.zip",
+    "size": 534447280,
+    "sha256": "9fb2dc6e8b41d20d1249dfef33b731dfb9c9fc198b032698dd0e83c660dfc863"
+   }
+  },
+  {
+   "job_id": "118_physinone_rotation_and_friction_UniformSurfaceSpin__bg130__4Ha0wa",
+   "dataset": "physinone",
+   "category": "rotation_and_friction",
+   "sample_id": "UniformSurfaceSpin__bg130__4Ha0wa",
+   "source": "physinone/rotation_and_friction/UniformSurfaceSpin__bg130__4Ha0wa_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): spin_accel 1, spin_rate 1",
+   "video": {
+    "sha256": "59aefc37656d86e25860469256b645112ccfd7f056270325faa841520cf70a93",
+    "frame_count": 90,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP05/PhysInOneP05",
+    "revision": "042726dbf2da88de93df7174ace5c07f0d4af466",
+    "path": "Train/SinglePhysics/UniformSurfaceSpin__bg130__4Ha0wa_trajectory.zip",
+    "size": 253136879,
+    "sha256": "26f13ff0777826adbc5d790065503a0de9595ebea9de8cfe34ef7f681fb74874"
+   }
+  },
+  {
+   "job_id": "119_physinone_structural_stability_BlockWallCollapse__bg001__uExwgs",
+   "dataset": "physinone",
+   "category": "structural_stability",
+   "sample_id": "BlockWallCollapse__bg001__uExwgs",
+   "source": "physinone/structural_stability/BlockWallCollapse__bg001__uExwgs_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, mass_rel 8, restitution 2, speed0 6",
+   "video": {
+    "sha256": "856767b98906f659964021885f16b03cdff185669123847ce7da9e868f321b81",
+    "frame_count": 150,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP02/PhysInOneP02",
+    "revision": "c39abc07b1cf2d260b222d902065098b8f9f424d",
+    "path": "Train/SinglePhysics/BlockWallCollapse__bg001__uExwgs_trajectory.zip",
+    "size": 646175875,
+    "sha256": "341968cb568c16f259bf58ec2403dd6de79ad09a18106cd53512fb19919b8d69"
+   }
+  },
+  {
+   "job_id": "120_physinone_structural_stability_StickSupportFail__bg073__LvvPiF",
+   "dataset": "physinone",
+   "category": "structural_stability",
+   "sample_id": "StickSupportFail__bg073__LvvPiF",
+   "source": "physinone/structural_stability/StickSupportFail__bg073__LvvPiF_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 3, restitution 1, speed0 1",
+   "video": {
+    "sha256": "97c8e2d70fa6a5a1dd9f6d02a468de335a17b58637c24d3d5e2bbe77e68c0c37",
+    "frame_count": 150,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP06/PhysInOneP06",
+    "revision": "34f4a29a84c42e9c1fbbb68f32dda1909f929e37",
+    "path": "Train/SinglePhysics/StickSupportFail__bg073__LvvPiF_trajectory.zip",
+    "size": 303592232,
+    "sha256": "3a1029adec290fd619a242cacc6d85f3f82c981066d6fa26cb1e753d9a9019d1"
+   }
+  },
+  {
+   "job_id": "121_physinone_structural_stability_StickSupportFail__bg139__lLUFuy",
+   "dataset": "physinone",
+   "category": "structural_stability",
+   "sample_id": "StickSupportFail__bg139__lLUFuy",
+   "source": "physinone/structural_stability/StickSupportFail__bg139__lLUFuy_trajectory.zip",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 4, mass_rel 5, restitution 1, speed0 1",
+   "video": {
+    "sha256": "dc4e421527dbe8cba92f48aa4187109402bc5d78e1d67769b18317c1b5e585e5",
+    "frame_count": 300,
+    "frame_dt": 0.015963781372821343
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 35
+   },
+   "download": {
+    "repo": "PhysInOneP03/PhysInOneP03",
+    "revision": "b84c7b3be3c362a58c59eff36c7d4b2c7390a128",
+    "path": "Train/SinglePhysics/StickSupportFail__bg139__lLUFuy_trajectory.zip",
+    "size": 1513890971,
+    "sha256": "c8b4b7f13619f2ddeb9da1ec4d2d2e78c2d06d46bf47105a47286b8b03dcf98c"
+   }
+  },
+  {
+   "job_id": "001_physion_v15_link_pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1_0026",
+   "dataset": "physion_v15",
+   "category": "link",
+   "sample_id": "pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1_0026",
+   "source": "physion_v15/link/link_all_movies/pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1_0026.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, mass_rel 6, restitution 1, speed0 1",
+   "video": {
+    "sha256": "281ce8c76453abed211bbda9cfefb75da76a726d505da912bd76f1b6dcaf62c4",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "4de42eaeeac2458cf2d810de97f65df31a474fcfc846489bb000e37f99d1e8c0",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/link.zip",
+    "etag": "\"69a3dd914dc3049ab885331158265718-6673\"",
+    "archive_size": 111949415514,
+    "member": "link_all_movies/pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1_0026.hdf5",
+    "offset": 60128935841,
+    "compressed_size": 781068208,
+    "size": 804248911,
+    "crc32": 2345832074,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "005_physion_v15_collide_pilot_it2_collision_non-sphere_box_0003",
+   "dataset": "physion_v15",
+   "category": "collide",
+   "sample_id": "pilot_it2_collision_non-sphere_box_0003",
+   "source": "physion_v15/collide/collide_all_movies/pilot_it2_collision_non-sphere_box_0003.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 2, restitution 2, speed0 1",
+   "video": {
+    "sha256": "9885ba88220fcf051261a193c4fa573f9ce0b589b8d22aed3bd7aaf229adef24",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "d1e691f890e1b0e4323f4ef5850a8b9cad86e43b410d41095240e5daaf3853f7",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/collide.zip",
+    "etag": "\"d48e2f42c812487a552e86371c0a1d10-7029\"",
+    "archive_size": 58955521261,
+    "member": "collide_all_movies/pilot_it2_collision_non-sphere_box_0003.hdf5",
+    "offset": 40081698161,
+    "compressed_size": 463040572,
+    "size": 483655017,
+    "crc32": 1003014453,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "006_physion_v15_drop_pilot_it2_drop_all_bowls_tdw_1_dis_1_occ_0027",
+   "dataset": "physion_v15",
+   "category": "drop",
+   "sample_id": "pilot_it2_drop_all_bowls_tdw_1_dis_1_occ_0027",
+   "source": "physion_v15/drop/drop_all_movies/pilot_it2_drop_all_bowls_tdw_1_dis_1_occ_0027.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 2",
+   "video": {
+    "sha256": "6285acfdb4b139b0999b1ed339bd054ea29cbe5b9511453b4c2f6d9b64df6a3f",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "d03806feef9d7ac548275c3a2591bfb1c9412d23d28ab490818d4bda2a5977d5",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/drop.zip",
+    "etag": "\"289dcd6320ac5557a23ddac34d94345a-5047\"",
+    "archive_size": 84668555420,
+    "member": "drop_all_movies/pilot_it2_drop_all_bowls_tdw_1_dis_1_occ_0027.hdf5",
+    "offset": 26644091359,
+    "compressed_size": 765780968,
+    "size": 792102263,
+    "crc32": 2510266175,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "012_physion_v15_support_pilot_towers_nb4_SJ025_mono1_dis0_occ0_tdwroom_unstable_0006",
+   "dataset": "physion_v15",
+   "category": "support",
+   "sample_id": "pilot_towers_nb4_SJ025_mono1_dis0_occ0_tdwroom_unstable_0006",
+   "source": "physion_v15/support/support_all_movies/pilot_towers_nb4_SJ025_mono1_dis0_occ0_tdwroom_unstable_0006.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, mass_rel 6, restitution 4, speed0 1",
+   "video": {
+    "sha256": "2b5b7187791ff1196a43f17b24b813f9dd334fe39656f339f4f42af89db34f19",
+    "frame_count": 759,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "ebe1f73a49ed5766732505a060f638b8e704691eb2070d85e475270bdc875c7e",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/support.zip",
+    "etag": "\"b9ae809bd80ca8bafa8544b5f94a77bb-6066\"",
+    "archive_size": 203516449146,
+    "member": "support_all_movies/pilot_towers_nb4_SJ025_mono1_dis0_occ0_tdwroom_unstable_0006.hdf5",
+    "offset": 160298052972,
+    "compressed_size": 2291698222,
+    "size": 2485522765,
+    "crc32": 1538517359,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "016_physion_v15_contain_pilot-containment-bowl_0046",
+   "dataset": "physion_v15",
+   "category": "contain",
+   "sample_id": "pilot-containment-bowl_0046",
+   "source": "physion_v15/contain/contain_all_movies/pilot-containment-bowl_0046.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 4, speed0 2",
+   "video": {
+    "sha256": "2223a85cb203d9b2ef1164da6607d0f4c91769adc8cb9560000e14309812dac7",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "0a54d231d4d147cca4b88a7934d20d60b1f4168260d3263454d5403d905e5524",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/contain.zip",
+    "etag": "\"2e0bb24e72c672799ed9c2746bdcc568-6118\"",
+    "archive_size": 102641421408,
+    "member": "contain_all_movies/pilot-containment-bowl_0046.hdf5",
+    "offset": 92248189117,
+    "compressed_size": 750256031,
+    "size": 774058145,
+    "crc32": 1732377183,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "019_physion_v15_support_pilot_towers_nb2_fr015_SJ010_mono0_dis0_occ0_tdwroom_stable_0030",
+   "dataset": "physion_v15",
+   "category": "support",
+   "sample_id": "pilot_towers_nb2_fr015_SJ010_mono0_dis0_occ0_tdwroom_stable_0030",
+   "source": "physion_v15/support/support_all_movies/pilot_towers_nb2_fr015_SJ010_mono0_dis0_occ0_tdwroom_stable_0030.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, mass_rel 4, restitution 1, speed0 1",
+   "video": {
+    "sha256": "9e2197b6c3921ca6e03d1e88c21939a342f130f0689956d8811cfdd8a5968f3d",
+    "frame_count": 442,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "a442957ce4b9f057861ce9283fb4e8246c7211d793d6c112b0cd74765b8c236e",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/support.zip",
+    "etag": "\"b9ae809bd80ca8bafa8544b5f94a77bb-6066\"",
+    "archive_size": 203516449146,
+    "member": "support_all_movies/pilot_towers_nb2_fr015_SJ010_mono0_dis0_occ0_tdwroom_stable_0030.hdf5",
+    "offset": 57847193958,
+    "compressed_size": 1297746402,
+    "size": 1417488480,
+    "crc32": 1156024210,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "025_physion_v15_link_pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1_long_a_0006",
+   "dataset": "physion_v15",
+   "category": "link",
+   "sample_id": "pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1_long_a_0006",
+   "source": "physion_v15/link/link_all_movies/pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1_long_a_0006.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 6, restitution 4, speed0 1",
+   "video": {
+    "sha256": "7a0fc5a0b2abcbb4c6bde5410ecd2893933d8d99574cf411f4f73ebb7a85af43",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "fabd493a4d5ae30f3def0e794d6e47a0f9eacc65ab28698edb033ab7e2eb87e9",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/link.zip",
+    "etag": "\"69a3dd914dc3049ab885331158265718-6673\"",
+    "archive_size": 111949415514,
+    "member": "link_all_movies/pilot_linking_nl1-8_mg000_aCyl_bCyl_tdwroom1_long_a_0006.hdf5",
+    "offset": 31871101449,
+    "compressed_size": 645130179,
+    "size": 670225900,
+    "crc32": 2612377941,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "028_physion_v15_collide_pilot_it2_collision_non-sphere_box_0017",
+   "dataset": "physion_v15",
+   "category": "collide",
+   "sample_id": "pilot_it2_collision_non-sphere_box_0017",
+   "source": "physion_v15/collide/collide_all_movies/pilot_it2_collision_non-sphere_box_0017.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): mass_rel 2, speed0 1",
+   "video": {
+    "sha256": "de9142a9f4aa41319dc89a90ab064870719b64c41ad55f798e3fd7d86f97da91",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "d9d730acb939ed9e00c77b140504d76201471c52d0f3ca4ee0ff52899e9abd56",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/collide.zip",
+    "etag": "\"d48e2f42c812487a552e86371c0a1d10-7029\"",
+    "archive_size": 58955521261,
+    "member": "collide_all_movies/pilot_it2_collision_non-sphere_box_0017.hdf5",
+    "offset": 29321580949,
+    "compressed_size": 578341060,
+    "size": 600740170,
+    "crc32": 3626141368,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "032_physion_v15_roll_pilot_it2_rollingSliding_simple_ledge_tdw_1_dis_1_occ_sphere_small_zone_0023",
+   "dataset": "physion_v15",
+   "category": "roll",
+   "sample_id": "pilot_it2_rollingSliding_simple_ledge_tdw_1_dis_1_occ_sphere_small_zone_0023",
+   "source": "physion_v15/roll/roll_all_movies/pilot_it2_rollingSliding_simple_ledge_tdw_1_dis_1_occ_sphere_small_zone_0023.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, speed0 1",
+   "video": {
+    "sha256": "17219fd2b4183e3a2736d3ff753651492ad990396f7531d9219d126fe0a34604",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "2e4bf2acf8c5bb659597bc670092048f53b4014c3f88f5d1a0fd0ffa15e81e54",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/roll.zip",
+    "etag": "\"bd83c5cf72b1da86d750d6763878aaff-5142\"",
+    "archive_size": 86252948725,
+    "member": "roll_all_movies/pilot_it2_rollingSliding_simple_ledge_tdw_1_dis_1_occ_sphere_small_zone_0023.hdf5",
+    "offset": 46217203884,
+    "compressed_size": 656733325,
+    "size": 679737922,
+    "crc32": 100321354,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "033_physion_v15_roll_pilot_it2_rollingSliding_simple_ledge_box_0019",
+   "dataset": "physion_v15",
+   "category": "roll",
+   "sample_id": "pilot_it2_rollingSliding_simple_ledge_box_0019",
+   "source": "physion_v15/roll/roll_all_movies/pilot_it2_rollingSliding_simple_ledge_box_0019.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, restitution 1, speed0 1",
+   "video": {
+    "sha256": "576399b22b2e29517f2ff34af1a2d61976c87a7cb70214ef4c08564a56e90103",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "1576d1a2169b98fad37fba9963018dbfa0e44239863733cfc0cf6d030c959c94",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/roll.zip",
+    "etag": "\"bd83c5cf72b1da86d750d6763878aaff-5142\"",
+    "archive_size": 86252948725,
+    "member": "roll_all_movies/pilot_it2_rollingSliding_simple_ledge_box_0019.hdf5",
+    "offset": 41359141270,
+    "compressed_size": 648170805,
+    "size": 671629491,
+    "crc32": 2428617847,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "036_physion_v15_drop_pilot_it2_drop_simple_tdw_1_dis_1_occ_0032",
+   "dataset": "physion_v15",
+   "category": "drop",
+   "sample_id": "pilot_it2_drop_simple_tdw_1_dis_1_occ_0032",
+   "source": "physion_v15/drop/drop_all_movies/pilot_it2_drop_simple_tdw_1_dis_1_occ_0032.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): restitution 1",
+   "video": {
+    "sha256": "037511dae8a34ec35c4f3cbac7cb25b64ff0346ea25fcd5b1293f7491926d994",
+    "frame_count": 148,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "two_step",
+    "step1_fps": 30.0,
+    "step1_sha256": "ad990cb26ccc7322e89b2b33ce8b9fc49a8320a5f8304c05a2adef867b8d51c6",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/drop.zip",
+    "etag": "\"289dcd6320ac5557a23ddac34d94345a-5047\"",
+    "archive_size": 84668555420,
+    "member": "drop_all_movies/pilot_it2_drop_simple_tdw_1_dis_1_occ_0032.hdf5",
+    "offset": 47933511298,
+    "compressed_size": 498573487,
+    "size": 517453867,
+    "crc32": 1749952559,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "122_physion_v15_collide_pilot_it2_collision_tiny_ball_box_0002",
+   "dataset": "physion_v15",
+   "category": "collide",
+   "sample_id": "pilot_it2_collision_tiny_ball_box_0002",
+   "source": "physion_v15/collide/collide_all_movies/pilot_it2_collision_tiny_ball_box_0002.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, mass_rel 2, restitution 2, speed0 1",
+   "video": {
+    "sha256": "28d90073c2bc3f36409fd95c101fa725f31c19699e3aae33050accd3fdfff06a",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/collide.zip",
+    "etag": "\"d48e2f42c812487a552e86371c0a1d10-7029\"",
+    "archive_size": 58955521261,
+    "member": "collide_all_movies/pilot_it2_collision_tiny_ball_box_0002.hdf5",
+    "offset": 10286871769,
+    "compressed_size": 626259057,
+    "size": 653022370,
+    "crc32": 3448416129,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "123_physion_v15_collide_pilot_it2_collision_assorted_targets_box_0003",
+   "dataset": "physion_v15",
+   "category": "collide",
+   "sample_id": "pilot_it2_collision_assorted_targets_box_0003",
+   "source": "physion_v15/collide/collide_all_movies/pilot_it2_collision_assorted_targets_box_0003.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, mass_rel 2, restitution 1, speed0 1",
+   "video": {
+    "sha256": "c9d136f70cd7d7e32713b8df0cf7aa4a4573c64f56decf7c335e5706e773fb4e",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/collide.zip",
+    "etag": "\"d48e2f42c812487a552e86371c0a1d10-7029\"",
+    "archive_size": 58955521261,
+    "member": "collide_all_movies/pilot_it2_collision_assorted_targets_box_0003.hdf5",
+    "offset": 45900745505,
+    "compressed_size": 625777187,
+    "size": 649096862,
+    "crc32": 912002398,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "124_physion_v15_contain_pilot-containment-cylinder-bowl_0011",
+   "dataset": "physion_v15",
+   "category": "contain",
+   "sample_id": "pilot-containment-cylinder-bowl_0011",
+   "source": "physion_v15/contain/contain_all_movies/pilot-containment-cylinder-bowl_0011.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, mass_rel 5, restitution 4, speed0 3",
+   "video": {
+    "sha256": "f1c9f624b6168cac4210387736f8be3f4bee1ff9bccd71695b0dcf08a45f6ba2",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/contain.zip",
+    "etag": "\"2e0bb24e72c672799ed9c2746bdcc568-6118\"",
+    "archive_size": 102641421408,
+    "member": "contain_all_movies/pilot-containment-cylinder-bowl_0011.hdf5",
+    "offset": 98950227250,
+    "compressed_size": 827426956,
+    "size": 850866932,
+    "crc32": 4258754846,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "125_physion_v15_contain_pilot-containment-multi-bowl_0006",
+   "dataset": "physion_v15",
+   "category": "contain",
+   "sample_id": "pilot-containment-multi-bowl_0006",
+   "source": "physion_v15/contain/contain_all_movies/pilot-containment-multi-bowl_0006.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 4, mass_rel 6, restitution 3, speed0 3",
+   "video": {
+    "sha256": "eae78f4019b6695cfbba6ac4bb49966af755b4c76788d0895536826ca97d07d1",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/contain.zip",
+    "etag": "\"2e0bb24e72c672799ed9c2746bdcc568-6118\"",
+    "archive_size": 102641421408,
+    "member": "contain_all_movies/pilot-containment-multi-bowl_0006.hdf5",
+    "offset": 44425823113,
+    "compressed_size": 653785063,
+    "size": 688226172,
+    "crc32": 707210336,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "126_physion_v15_contain_pilot-containment-vase_0043",
+   "dataset": "physion_v15",
+   "category": "contain",
+   "sample_id": "pilot-containment-vase_0043",
+   "source": "physion_v15/contain/contain_all_movies/pilot-containment-vase_0043.hdf5",
+   "first_frame": 5,
+   "why": "GT items (screen): decel 5, mass_rel 5, restitution 3, speed0 4",
+   "trim_reason": "invisible push at source frame 5 (static/push_time): leading still frames dropped so the push falls between video frames 0 and 1",
+   "video": {
+    "sha256": "2974bf2d8d1cf0924050f0f5a37de72a746c496c63fe6b0a1099c242e5bec703",
+    "frame_count": 246,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/contain.zip",
+    "etag": "\"2e0bb24e72c672799ed9c2746bdcc568-6118\"",
+    "archive_size": 102641421408,
+    "member": "contain_all_movies/pilot-containment-vase_0043.hdf5",
+    "offset": 46526092025,
+    "compressed_size": 892841991,
+    "size": 927220290,
+    "crc32": 639738866,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "127_physion_v15_dominoes_pilot_dominoes_4midRM1_tdwroom_2_0001",
+   "dataset": "physion_v15",
+   "category": "dominoes",
+   "sample_id": "pilot_dominoes_4midRM1_tdwroom_2_0001",
+   "source": "physion_v15/dominoes/dominoes_all_movies/pilot_dominoes_4midRM1_tdwroom_2_0001.hdf5",
+   "first_frame": 15,
+   "why": "GT items (screen): mass_rel 6, restitution 1, speed0 1",
+   "trim_reason": "invisible push at source frame 15 (static/push_time): leading still frames dropped so the push falls between video frames 0 and 1",
+   "video": {
+    "sha256": "16e9af1bee546e13bea1c0045455b6f992add4bcd432dea37dc3a69019e8d047",
+    "frame_count": 195,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/dominoes.zip",
+    "etag": "\"804871c573444846ff9cb367ba60afcc-8522\"",
+    "archive_size": 71480128210,
+    "member": "dominoes_all_movies/pilot_dominoes_4midRM1_tdwroom_2_0001.hdf5",
+    "offset": 61990701220,
+    "compressed_size": 532495621,
+    "size": 555933137,
+    "crc32": 562008139,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "128_physion_v15_dominoes_pilot_dominoes_default_boxroom_0017",
+   "dataset": "physion_v15",
+   "category": "dominoes",
+   "sample_id": "pilot_dominoes_default_boxroom_0017",
+   "source": "physion_v15/dominoes/dominoes_all_movies/pilot_dominoes_default_boxroom_0017.hdf5",
+   "first_frame": 15,
+   "why": "GT items (screen): mass_rel 4, restitution 1, speed0 1",
+   "trim_reason": "invisible push at source frame 15 (static/push_time): leading still frames dropped so the push falls between video frames 0 and 1",
+   "video": {
+    "sha256": "b5e83eb26c2263a68ddd789e0ed17adff384dac3196198a94092341a9ec7f809",
+    "frame_count": 164,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/dominoes.zip",
+    "etag": "\"804871c573444846ff9cb367ba60afcc-8522\"",
+    "archive_size": 71480128210,
+    "member": "dominoes_all_movies/pilot_dominoes_default_boxroom_0017.hdf5",
+    "offset": 27513626818,
+    "compressed_size": 435907264,
+    "size": 451495423,
+    "crc32": 1041909425,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "129_physion_v15_dominoes_pilot_dominoes_0mid_d3chairs_o1plants_tdwroom_0012",
+   "dataset": "physion_v15",
+   "category": "dominoes",
+   "sample_id": "pilot_dominoes_0mid_d3chairs_o1plants_tdwroom_0012",
+   "source": "physion_v15/dominoes/dominoes_all_movies/pilot_dominoes_0mid_d3chairs_o1plants_tdwroom_0012.hdf5",
+   "first_frame": 15,
+   "why": "GT items (screen): mass_rel 2, restitution 1, speed0 1",
+   "trim_reason": "invisible push at source frame 15 (static/push_time): leading still frames dropped so the push falls between video frames 0 and 1",
+   "video": {
+    "sha256": "7ebfd70c399df159649095d7196187f486d5f13d25d6dbb5fb89c22eba47c0d4",
+    "frame_count": 130,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/dominoes.zip",
+    "etag": "\"804871c573444846ff9cb367ba60afcc-8522\"",
+    "archive_size": 71480128210,
+    "member": "dominoes_all_movies/pilot_dominoes_0mid_d3chairs_o1plants_tdwroom_0012.hdf5",
+    "offset": 28970185256,
+    "compressed_size": 389401735,
+    "size": 404192005,
+    "crc32": 2835188243,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "130_physion_v15_drop_pilot_it2_drop_sizes_box_0024",
+   "dataset": "physion_v15",
+   "category": "drop",
+   "sample_id": "pilot_it2_drop_sizes_box_0024",
+   "source": "physion_v15/drop/drop_all_movies/pilot_it2_drop_sizes_box_0024.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, mass_rel 2",
+   "video": {
+    "sha256": "a3ba12b2607862f5b70cf2490ed5e8cc2e4542d68710dfceedd6b64fb0610d1e",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/drop.zip",
+    "etag": "\"289dcd6320ac5557a23ddac34d94345a-5047\"",
+    "archive_size": 84668555420,
+    "member": "drop_all_movies/pilot_it2_drop_sizes_box_0024.hdf5",
+    "offset": 53376084616,
+    "compressed_size": 589975756,
+    "size": 614762444,
+    "crc32": 1350962081,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "131_physion_v15_drop_pilot_it2_drop_simple_box_0003",
+   "dataset": "physion_v15",
+   "category": "drop",
+   "sample_id": "pilot_it2_drop_simple_box_0003",
+   "source": "physion_v15/drop/drop_all_movies/pilot_it2_drop_simple_box_0003.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, restitution 1",
+   "video": {
+    "sha256": "066bd768ab69194107b083c51813027349020e5559f9fd9d24e11807f0ed7ad4",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/drop.zip",
+    "etag": "\"289dcd6320ac5557a23ddac34d94345a-5047\"",
+    "archive_size": 84668555420,
+    "member": "drop_all_movies/pilot_it2_drop_simple_box_0003.hdf5",
+    "offset": 1867626570,
+    "compressed_size": 736676719,
+    "size": 758495221,
+    "crc32": 2760200187,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "132_physion_v15_link_pilot_linking_nl2-3_mg01_aCone_bCyl_boxroom_0025",
+   "dataset": "physion_v15",
+   "category": "link",
+   "sample_id": "pilot_linking_nl2-3_mg01_aCone_bCyl_boxroom_0025",
+   "source": "physion_v15/link/link_all_movies/pilot_linking_nl2-3_mg01_aCone_bCyl_boxroom_0025.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, mass_rel 6, restitution 4, speed0 4",
+   "video": {
+    "sha256": "330c7db202a0a57afefcdb51e99fc5985cdadf66418d705f60bd66d46747aca0",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/link.zip",
+    "etag": "\"69a3dd914dc3049ab885331158265718-6673\"",
+    "archive_size": 111949415514,
+    "member": "link_all_movies/pilot_linking_nl2-3_mg01_aCone_bCyl_boxroom_0025.hdf5",
+    "offset": 17785801838,
+    "compressed_size": 730125337,
+    "size": 756407978,
+    "crc32": 1686659910,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "133_physion_v15_roll_pilot_it2_rollingSliding_simple_ramp_box_zone_away_0018",
+   "dataset": "physion_v15",
+   "category": "roll",
+   "sample_id": "pilot_it2_rollingSliding_simple_ramp_box_zone_away_0018",
+   "source": "physion_v15/roll/roll_all_movies/pilot_it2_rollingSliding_simple_ramp_box_zone_away_0018.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, restitution 1, speed0 1",
+   "video": {
+    "sha256": "597c291519cda8f0c1442480e17a482e48a8cd78fe63062d5da8beef1350ba9e",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/roll.zip",
+    "etag": "\"bd83c5cf72b1da86d750d6763878aaff-5142\"",
+    "archive_size": 86252948725,
+    "member": "roll_all_movies/pilot_it2_rollingSliding_simple_ramp_box_zone_away_0018.hdf5",
+    "offset": 37393099167,
+    "compressed_size": 708813093,
+    "size": 738036093,
+    "crc32": 2360565744,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "134_physion_v15_roll_pilot_it2_rollingSliding_simple_collision_tdw_1_dis_1_occ_0000",
+   "dataset": "physion_v15",
+   "category": "roll",
+   "sample_id": "pilot_it2_rollingSliding_simple_collision_tdw_1_dis_1_occ_0000",
+   "source": "physion_v15/roll/roll_all_movies/pilot_it2_rollingSliding_simple_collision_tdw_1_dis_1_occ_0000.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 1, mass_rel 2, restitution 1, speed0 1",
+   "video": {
+    "sha256": "8287cd818d096c639c225e47a01cae02cab6d8259adeca80c8fcc6b7e9caf663",
+    "frame_count": 251,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/roll.zip",
+    "etag": "\"bd83c5cf72b1da86d750d6763878aaff-5142\"",
+    "archive_size": 86252948725,
+    "member": "roll_all_movies/pilot_it2_rollingSliding_simple_collision_tdw_1_dis_1_occ_0000.hdf5",
+    "offset": 22587104765,
+    "compressed_size": 558668412,
+    "size": 584098798,
+    "crc32": 1638411548,
+    "compression": 8
+   }
+  },
+  {
+   "job_id": "135_physion_v15_support_pilot_towers_nb5_fr015_SJ030_mono0_dis0_occ0_boxroom_unstable_0005",
+   "dataset": "physion_v15",
+   "category": "support",
+   "sample_id": "pilot_towers_nb5_fr015_SJ030_mono0_dis0_occ0_boxroom_unstable_0005",
+   "source": "physion_v15/support/support_all_movies/pilot_towers_nb5_fr015_SJ030_mono0_dis0_occ0_boxroom_unstable_0005.hdf5",
+   "first_frame": 0,
+   "why": "GT items (screen): decel 2, mass_rel 7, restitution 3, speed0 1",
+   "video": {
+    "sha256": "9a2c3d02a0c6f4c237f1170219b7c84fd680dcc7ea0f5c5be8c48eeb9bb4e4a1",
+    "frame_count": 370,
+    "frame_dt": 0.01
+   },
+   "encoding": {
+    "route": "direct",
+    "x264_threads": 32
+   },
+   "download": {
+    "url": "https://physion-model-test-set-test.s3.us-east-2.amazonaws.com/support.zip",
+    "etag": "\"b9ae809bd80ca8bafa8544b5f94a77bb-6066\"",
+    "archive_size": 203516449146,
+    "member": "support_all_movies/pilot_towers_nb5_fr015_SJ030_mono0_dis0_occ0_boxroom_unstable_0005.hdf5",
+    "offset": 88607099127,
+    "compressed_size": 1317414259,
+    "size": 1354329279,
+    "crc32": 2220487134,
+    "compression": 8
+   }
+  }
+ ]
+}

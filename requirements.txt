@@ -1,0 +1,8 @@
+# CPU environment of the real2sim skill (REAL2SIM_PYTHON): python -m r2s, the delivered run.py, src/tests/.
+# Python >= 3.10; FFmpeg (ffmpeg, ffprobe) on PATH; headless rendering through EGL (MUJOCO_GL=egl).
+mujoco==3.6.0                  # the version the published reconstructions and evaluations used
+numpy>=1.24
+scipy>=1.10
+opencv-python-headless>=4.8
+Pillow>=10
+matplotlib>=3.7

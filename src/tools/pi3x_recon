@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Pi3X feed-forward 4D reconstruction (GPU): per-frame camera pose, depth, intrinsics and world
+points with approximate METRIC scale.
+
+usage: tools/pi3x_recon --input input/video.mp4 --out work/pi3x [--sample-fps 10] [--max-frames 64]
+         [--window-frames W]
+
+Frames are sampled from the video at --sample-fps (default 1 fps; use the video fps for every frame)
+up to --max-frames (default 64). Long sequences run in overlapping windows merged by similarity
+alignment. Outputs in --out:
+  manifest.json      frames[] (source_frame_index, timestamp_seconds), processed_size_hw, metric_scale, conventions
+  predictions.npz    depths (N,h,w), world_points (N,h,w,3), camera_to_world (N,3,4), intrinsics (N,3,3) in
+                     processed pixels, depth_confidence (N,h,w)
+World = first sampled camera, OpenCV axes (x right, y down, z forward); units approximately metres
+(learned estimate, not exact). Images are resized to processed_size_hw: rescale intrinsics/pixels
+to the source video resolution yourself. GPUs are shared: on out-of-memory, retry with fewer frames.
+"""
+import argparse, json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _gpu_call import call
+
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("--input", required=True); ap.add_argument("--out", required=True)
+ap.add_argument("--sample-fps", type=float, default=1.0); ap.add_argument("--max-frames", type=int, default=64)
+ap.add_argument("--window-frames", type=int)
+a = ap.parse_args()
+req = dict(input_path=str(Path(a.input).resolve()), output_dir=str(Path(a.out).resolve()),
+           sample_fps=a.sample_fps, max_frames=a.max_frames)
+if a.window_frames: req["window_frames"] = a.window_frames
+Path(a.out).mkdir(parents=True, exist_ok=True)
+print(json.dumps(call("pi3x", req), indent=1))
